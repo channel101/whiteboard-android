@@ -6,7 +6,13 @@
     <title>Excalidraw</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; overflow: hidden; }
+        html, body { 
+            width: 100%; height: 100%; overflow: hidden; 
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
         #root { width: 100%; height: 100%; }
         #status {
             display: flex; align-items: center; justify-content: center;
@@ -16,9 +22,6 @@
         }
         #status.error { color: #e03131; }
 
-        /* Pre-register Excalidraw fonts from local assets.
-           Relative URLs resolve from this document's location:
-           file:///android_asset/excalidraw.html → lib/excalidraw-assets/... */
         @font-face {
             font-family: 'Virgil';
             src: url('lib/excalidraw-assets/Virgil.woff2') format('woff2');
@@ -58,7 +61,6 @@
 <body>
     <div id="root"><div id="status">Loading Excalidraw...</div></div>
 
-    <!-- Set asset path BEFORE loading the bundle so webpack uses local fonts -->
     <script>window.EXCALIDRAW_ASSET_PATH = 'file:///android_asset/lib/';</script>
 
     <script src="lib/react.production.min.js"></script>
@@ -68,6 +70,10 @@
     <script>
     (function () {
         'use strict';
+
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
 
         function showError(msg) {
             var el = document.getElementById('status');
@@ -87,7 +93,6 @@
 
         if (!Excalidraw) { showError('Excalidraw component not found'); return; }
 
-        // ── Load initial scene data synchronously from Java ───────────────────
         var initialData = null;
         try {
             if (window.Android) {
@@ -105,24 +110,16 @@
             console.warn('[Excalidraw] Could not load initial data: ' + e.message);
         }
 
-        // Match body background to theme before React renders to avoid a white flash.
         if (initialData && initialData.appState && initialData.appState.theme === 'dark') {
             document.body.style.backgroundColor = '#1e1e2e';
         }
 
-        // ── Scene state ───────────────────────────────────────────────────────
         var currentElements = (initialData && initialData.elements) || [];
         var currentAppState = (initialData && initialData.appState) || {};
         var currentFiles    = (initialData && initialData.files)    || {};
 
-        // ── Dirty tracking — compare element version sums, not array references ──
-        // onChange fires on every pan/zoom too. Array references change on every
-        // call, so reference equality doesn't work. Instead we sum each element's
-        // `version` counter (Excalidraw increments it on every edit, not on pan).
-        // The baseline is captured from the first onChange after mount so that
-        // Excalidraw's own internal normalisation on load doesn't count as dirty.
         var isDirty    = false;
-        var cleanStamp = null;   // null = baseline not yet captured
+        var cleanStamp = null;   
         var lastTheme  = (initialData && initialData.appState && initialData.appState.theme) || 'light';
 
         function sceneStamp(elements) {
@@ -135,33 +132,16 @@
         window.isDirty   = function () { return isDirty; };
         window.markSaved = function () { isDirty = false; cleanStamp = sceneStamp(currentElements); };
 
-        // ── Back arrow icon for Back menu item ────────────────────────────────
         var backIcon = React.createElement('svg', {
-            xmlns:   'http://www.w3.org/2000/svg',
-            viewBox: '0 0 24 24',
-            width:   16,
-            height:  16,
-            fill:    'currentColor'
-        }, React.createElement('path', {
-            d: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z'
-        }));
+            xmlns:   'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', width: 16, height: 16, fill: 'currentColor'
+        }, React.createElement('path', { d: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z' }));
 
-        // ── Floppy disk icon for Save menu item ───────────────────────────────
         var saveIcon = React.createElement('svg', {
-            xmlns:   'http://www.w3.org/2000/svg',
-            viewBox: '0 0 24 24',
-            width:   16,
-            height:  16,
-            fill:    'currentColor'
-        }, React.createElement('path', {
-            d: 'M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 ' +
-               '2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z'
-        }));
+            xmlns:   'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', width: 16, height: 16, fill: 'currentColor'
+        }, React.createElement('path', { d: 'M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z' }));
 
-        // ── App component ─────────────────────────────────────────────────────
         function App() {
             React.useEffect(function () {
-                console.log('[Excalidraw] mounted, notifying Android');
                 try {
                     if (window.Android) window.Android.onExcalidrawReady();
                 } catch (e) {
@@ -175,12 +155,10 @@
                 currentElements = elements;
                 var stamp = sceneStamp(elements);
                 if (cleanStamp === null) {
-                    // First onChange after mount — capture as clean baseline.
                     cleanStamp = stamp;
                 } else if (stamp !== cleanStamp) {
                     isDirty = true;
                 }
-                // Notify Java when the user switches dark/light theme
                 var theme = (appState && appState.theme) || 'light';
                 if (theme !== lastTheme) {
                     lastTheme = theme;
@@ -191,23 +169,14 @@
             var menu = null;
             if (MainMenu && MainMenu.Item) {
                 var items = [];
-
                 items.push(React.createElement(MainMenu.Item, {
-                    key:      'back',
-                    icon:     backIcon,
-                    onSelect: function () {
-                        try { if (window.Android) window.Android.goBack(); }
-                        catch (e) { console.error('[Excalidraw] goBack failed', e); }
-                    }
+                    key: 'back', icon: backIcon,
+                    onSelect: function () { try { if (window.Android) window.Android.goBack(); } catch (e) {} }
                 }, 'Back'));
 
                 items.push(React.createElement(MainMenu.Item, {
-                    key:      'save',
-                    icon:     saveIcon,
-                    onSelect: function () {
-                        try { if (window.Android) window.Android.saveFile(); }
-                        catch (e) { console.error('[Excalidraw] saveFile failed', e); }
-                    }
+                    key: 'save', icon: saveIcon,
+                    onSelect: function () { try { if (window.Android) window.Android.saveFile(); } catch (e) {} }
                 }, 'Save'));
 
                 var D = MainMenu.DefaultItems;
@@ -218,17 +187,12 @@
                     if (D.ToggleTheme)            items.push(React.createElement(D.ToggleTheme,            { key: 'd-theme' }));
                     if (D.Help)                   items.push(React.createElement(D.Help,                   { key: 'd-hlp'   }));
                 }
-
                 menu = React.createElement(MainMenu, null, items);
             }
 
-            return React.createElement(Excalidraw,
-                { initialData: initialData, onChange: onChange },
-                menu
-            );
+            return React.createElement(Excalidraw, { initialData: initialData, onChange: onChange }, menu);
         }
 
-        // ── Render ────────────────────────────────────────────────────────────
         try {
             var root = ReactDOM.createRoot(document.getElementById('root'));
             root.render(React.createElement(App));
@@ -237,13 +201,10 @@
             return;
         }
 
-        // ── Java-callable functions ───────────────────────────────────────────
         window.getScene = function () {
             var s = currentAppState || {};
             return JSON.stringify({
-                type:     'excalidraw',
-                version:  2,
-                source:   'android',
+                type: 'excalidraw', version: 2, source: 'android',
                 elements: currentElements || [],
                 appState: {
                     viewBackgroundColor:        s.viewBackgroundColor        || '#ffffff',
@@ -269,6 +230,36 @@
             currentAppState = {};
             currentFiles    = {};
         };
+
+        var isDrawing = false;
+        var rootEl = document.getElementById('root');
+
+        rootEl.addEventListener('pointerdown', handlePointerDown, true);
+        rootEl.addEventListener('pointerup', handlePointerUp, true);
+        rootEl.addEventListener('pointercancel', handlePointerUp, true); 
+        rootEl.addEventListener('pointerout', handlePointerUp, true); 
+
+        function handlePointerDown(e) {
+            if (e.pointerType !== 'pen') return; 
+            
+            isDrawing = true;
+            try { 
+                if (window.Android && window.Android.onDrawingStart) {
+                    window.Android.onDrawingStart(); 
+                }
+            } catch(err) {}
+        }
+
+        function handlePointerUp(e) {
+            if (!isDrawing || e.pointerType !== 'pen') return;
+            
+            isDrawing = false;
+            try { 
+                if (window.Android && window.Android.onDrawingEnd) {
+                    window.Android.onDrawingEnd(); 
+                }
+            } catch(err) {}
+        }
 
     }());
     </script>
